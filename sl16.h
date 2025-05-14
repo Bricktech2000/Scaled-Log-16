@@ -13,8 +13,8 @@ typedef uint16_t sl16_t;
 
 // generated with
 // printf("%#.4x\n", (int16_t)(log2(n) * (1 << SL16_INT_OFF)) & 0xfffe);
-#define SL16_MIN 0x8000   /* 0x1p-128 */
-#define SL16_MAX 0x7ffe   /* 0xffp120 */
+#define SL16_MIN 0x8000   /* 0x1.0p-128 */
+#define SL16_MAX 0x7ffe   /* 0x1.fep127 */
 #define SL16_ONE 0x0000   /* 1.0 */
 #define SL16_TWO 0x0100   /* 2.0 */
 #define SL16_THREE 0x0194 /* 3.0 */

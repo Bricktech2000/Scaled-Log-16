@@ -2,7 +2,31 @@
 #include <limits.h>
 #include <stdio.h>
 
-#define SIGMA 0x000a /* exp2(0.0430) */
+#if defined(SL16_LINEAR) == defined(SL16_QUADRATIC)
+#error exactly one of `SL16_LINEAR, SL16_QUADRATIC` must be defined
+#define SIGMA 0x0000
+#define LOG_POLY(X) log_poly = 0
+#define EXP_POLY(X) exp_poly = 0
+#else
+
+#ifdef SL16_LINEAR
+#define SIGMA 0x000a               /* exp2(0.0430) */
+#define LOG_POLY(X) log_poly = (X) /* x */
+#define EXP_POLY(X) exp_poly = (X) /* x */
+#endif
+
+#ifdef SL16_QUADRATIC
+#define SIGMA 0xfffe /* exp2(-0.005) */
+#define LOG_POLY(X)                                                            \
+  _x = (X), _x2 = (int32_t)_x * (int32_t)_x >> SL16_INT_OFF,                   \
+  log_poly = _x + (_x - _x2 >> 2) + (_x - _x2 >> 3) /* 11/8 x - 3/8 x2 */
+#define EXP_POLY(X)                                                            \
+  _x = (X), _x2 = (int32_t)_x * (int32_t)_x >> SL16_INT_OFF,                   \
+  exp_poly = _x + (_x2 - _x >> 2) + (_x2 - _x >> 3) /* 5/8 x + 3/8 x2 */
+#endif
+
+#endif
+
 // generalization of left shift that can shift past the bit with of the LHS and
 // that will right-shift when given a negative RHS
 #define SANE_SHIFT(N, S)                                                       \
@@ -18,17 +42,16 @@
     int e = 0; /* codegens into a `lzcnt` instruction */                       \
     for (unsigned DECL_SPEC m = n; m >>= 1; e++)                               \
       ;                                                                        \
-    return SIGMA + ((uint16_t)e << SL16_INT_OFF |                              \
-                    SANE_SHIFT(n, SL16_INT_OFF - e) & SL16_FRAC_MASK);         \
+    int16_t LOG_POLY(SANE_SHIFT(n, SL16_INT_OFF - e) & ~SL16_INT_MASK);        \
+    return ((uint16_t)e << SL16_INT_OFF | log_poly & SL16_FRAC_MASK) + SIGMA;  \
   }                                                                            \
                                                                                \
   unsigned DECL_SPEC sl16_intou##SUFFIX(sl16_t a) {                            \
     /* extract exponent and mantissa. piecewise linear approximation of: */    \
     /* return exp2((double)a / (1 << SL16_INT_OFF)); */                        \
-    a = (int16_t)(a - SIGMA) > (int16_t)a ? SL16_MIN : a - SIGMA;              \
-    return SANE_SHIFT(                                                         \
-        (unsigned DECL_SPEC)(a & ~SL16_INT_MASK | 1 << SL16_INT_OFF),          \
-        ((int16_t)a >> SL16_INT_OFF) - SL16_INT_OFF);                          \
+    int16_t EXP_POLY((a -= SIGMA) & ~SL16_INT_MASK);                           \
+    return SANE_SHIFT((unsigned DECL_SPEC)(exp_poly | 1 << SL16_INT_OFF),      \
+                      ((int16_t)a >> SL16_INT_OFF) - SL16_INT_OFF);            \
   }                                                                            \
                                                                                \
   sl16_t sl16_from##SUFFIX(signed DECL_SPEC n) {                               \
@@ -50,6 +73,8 @@ DEF_FROM_INTO(ll, long long)
 #undef DEF_FROM_INTO
 
 #undef SIGMA
+#undef LOG_POLY
+#undef EXP_POLY
 #undef SANE_SHIFT
 
 // remember that `sl16_t` stores values wrapped in logarithms and most of these

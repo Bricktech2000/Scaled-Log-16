@@ -8,6 +8,8 @@
 
 int main(void) {
 #define COMPARE(DBL, SL16) printf("%12f\t%12s\n", DBL, sl16_fmt(SL16))
+  COMPARE(1.0 / 10.0 + 2.0 / 10.0, sl16_add(sl16_div(SL16_ONE, sl16_from(10)),
+                                            sl16_div(SL16_TWO, sl16_from(10))));
   COMPARE(M_PI * pow(7.0, 2.0), sl16_mul(SL16_PI, sl16_square(sl16_from(7))));
   COMPARE(2.0 * sqrt(M_E), sl16_mul(SL16_TWO, sl16_sqrt(SL16_E)));
   COMPARE(-1.0, sl16_neg(SL16_ONE));
@@ -40,6 +42,7 @@ int main(void) {
   COMPARE(exp2(8.0), sl16_exp2(sl16_from(8)));
   COMPARE(exp2(M_TAU), sl16_exp2(SL16_TAU));
   COMPARE(exp2(-3.0), sl16_exp2(sl16_neg(SL16_THREE)));
+  COMPARE(exp2(1.0), sl16_exp2(SL16_ONE));
   COMPARE(exp2(0.5), sl16_exp2(SL16_HALF));
   COMPARE(exp2(0.0), sl16_exp2(SL16_MIN));
   COMPARE(log(923), sl16_log(sl16_from(923)));
