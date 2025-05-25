@@ -7,7 +7,7 @@
 #define M_TAU 8.0 * atan(1.0)
 
 int main(void) {
-#define COMPARE(DBL, SL16) printf("%12f\t%12s\n", DBL, sl16_fmt(SL16))
+#define COMPARE(DBL, SL16) printf("%12f %12s\n", DBL, sl16_fmt_f(SL16, "", 6))
   COMPARE(1.0 / 10.0 + 2.0 / 10.0, sl16_add(sl16_div(SL16_ONE, sl16_from(10)),
                                             sl16_div(SL16_TWO, sl16_from(10))));
   COMPARE(M_PI * pow(7.0, 2.0), sl16_mul(SL16_PI, sl16_square(sl16_from(7))));

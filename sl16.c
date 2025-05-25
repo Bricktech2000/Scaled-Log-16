@@ -1,6 +1,19 @@
 #include "sl16.h"
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
+
+// generalization of left shift that can shift past the bit with of the LHS and
+// that will right-shift when given a negative RHS
+#define SANE_SHIFT(N, S)                                                       \
+  ((S) >= 0 ? ((S) < sizeof(N) * CHAR_BIT ? (N) << (S) : 0)                    \
+            : (-(S) < sizeof(N) * CHAR_BIT ? (N) >> -(S) : 0))
+
+// upper bound on the numer of base-10 digits in the greatest value of type
+// `unsigned TYPE`. used to allocate `sprintf` buffers.
+// an approximation of `floor(1 + log2((double)UTYPE_MAX) * log10(2.0))`
+#define DIGS(TYPE) (1 + sizeof(TYPE) * CHAR_BIT * 7 / 23)
 
 #if defined(SL16_LINEAR) == defined(SL16_QUADRATIC)
 #error exactly one of `SL16_LINEAR, SL16_QUADRATIC` must be defined
@@ -27,15 +40,9 @@
 
 #endif
 
-// generalization of left shift that can shift past the bit with of the LHS and
-// that will right-shift when given a negative RHS
-#define SANE_SHIFT(N, S)                                                       \
-  ((S) >= 0 ? ((S) < sizeof(N) * CHAR_BIT ? (N) << (S) : 0)                    \
-            : (-(S) < sizeof(N) * CHAR_BIT ? (N) >> -(S) : 0))
-
 #define DEF_FROM_INTO(SUFFIX, DECL_SPEC)                                       \
   sl16_t sl16_fromu##SUFFIX(unsigned DECL_SPEC n) {                            \
-    /* pack exponent and mantissa. piecewise linear approximation of: */       \
+    /* pack exponent and mantissa. piecewise-polynomial approximation of */    \
     /* return log2((double)n) * (1 << SL16_INT_OFF); */                        \
     if (n == 0)                                                                \
       return SL16_MIN;                                                         \
@@ -47,7 +54,7 @@
   }                                                                            \
                                                                                \
   unsigned DECL_SPEC sl16_intou##SUFFIX(sl16_t a) {                            \
-    /* extract exponent and mantissa. piecewise linear approximation of: */    \
+    /* extract exponent and mantissa. piecewise-polynomial approximation of */ \
     /* return exp2((double)a / (1 << SL16_INT_OFF)); */                        \
     int16_t EXP_POLY((a -= SIGMA) & ~SL16_INT_MASK);                           \
     return SANE_SHIFT((unsigned DECL_SPEC)(exp_poly | 1 << SL16_INT_OFF),      \
@@ -75,7 +82,6 @@ DEF_FROM_INTO(ll, long long)
 #undef SIGMA
 #undef LOG_POLY
 #undef EXP_POLY
-#undef SANE_SHIFT
 
 // remember that `sl16_t` stores values wrapped in logarithms and most of these
 // functions should be self-explanatory
@@ -122,11 +128,38 @@ sl16_t sl16_hypot(sl16_t a, sl16_t b) {
 }
 sl16_t sl16_abs(sl16_t a) { return a & ~SL16_SIGN_MASK; }
 
-char *sl16_fmt(sl16_t a) {
-  // floor(1 + log2((double)ULLONG_MAX) * log10(2.0)) + sizeof("-.");
-  static char buf[1 + sizeof(long long) * CHAR_BIT * 7 / 23 + sizeof("-.")];
-  unsigned long long ae6 = sl16_intoull(a + 0x13ee /* 1000000 */);
-  snprintf(buf, sizeof(buf), "%s%llu.%06llu", a & SL16_SIGN_MASK ? "-" : "",
-           ae6 / 1000000, ae6 % 1000000);
+char *sl16_fmt_f(sl16_t a, char *flags, int prec) {
+  unsigned long long exp10 = 1;
+  for (int p = prec; p--; exp10 *= 10)
+    if (exp10 > ULLONG_MAX / 10)
+      return NULL; // additional iteration would overflow `exp10`
+
+  bool plus = strchr(flags, '+'), space = strchr(flags, ' '),
+       hash = strchr(flags, '#');
+  char *sign = a & SL16_SIGN_MASK ? "-" : plus ? "+" : space ? " " : "";
+  char *fmt = prec ? "%s%llu.%0*llu" : hash ? "%s%llu." : "%s%llu";
+  unsigned long long n = sl16_intoull(a + 0x0352 /* 10 */ * prec);
+
+  static char buf[DIGS(unsigned long long) + sizeof("-.")];
+  snprintf(buf, sizeof(buf), fmt, sign, n / exp10, prec, n % exp10);
+  return buf;
+}
+
+char *sl16_fmt_e(sl16_t a, char *flags, int prec) {
+  unsigned long long exp5 = 1;
+  for (int p = prec; p--; exp5 *= 5)
+    if (exp5 > SANE_SHIFT(ULLONG_MAX, SL16_INT_OFF - prec) / SL16_FRAC_MASK / 5)
+      return NULL; // additional iteration would overflow fractional part
+
+  bool plus = strchr(flags, '+'), space = strchr(flags, ' '),
+       hash = strchr(flags, '#');
+  char *sign = a & SL16_SIGN_MASK ? "-" : plus ? "+" : space ? " " : "";
+  char *fmt = prec ? "%s1p%c%hu.%0*llu" : hash ? "%s1p%c%hu." : "%s1p%c%hu";
+  char e_sign = (int16_t)a < 0 ? '-' : '+';
+  uint16_t e_abs = (int16_t)a < 0 ? -a : a;
+
+  static char buf[DIGS(short) + DIGS(unsigned long long) + sizeof("-1p+.")];
+  snprintf(buf, sizeof(buf), fmt, sign, e_sign, e_abs >> SL16_INT_OFF, prec,
+           SANE_SHIFT((e_abs & SL16_FRAC_MASK) * exp5, prec - SL16_INT_OFF));
   return buf;
 }

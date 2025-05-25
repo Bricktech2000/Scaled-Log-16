@@ -12,7 +12,7 @@ typedef uint16_t sl16_t;
 #define SL16_SIGN_MASK 0x0001 // 0000 0000 0000 0001
 
 // generated with
-// printf("%#.4x\n", (int16_t)(log2(n) * (1 << SL16_INT_OFF)) & 0xfffe);
+// printf("%04x\n", (int16_t)(log2(n) * (1 << SL16_INT_OFF)) & 0xfffe);
 #define SL16_MIN 0x8000   /* 0x1.0p-128 */
 #define SL16_MAX 0x7ffe   /* 0x1.fep127 */
 #define SL16_ONE 0x0000   /* 1.0 */
@@ -70,4 +70,5 @@ sl16_t sl16_min(sl16_t a, sl16_t b);
 sl16_t sl16_max(sl16_t a, sl16_t b);
 sl16_t sl16_abs(sl16_t a);
 
-char *sl16_fmt(sl16_t a);
+char *sl16_fmt_f(sl16_t a, char *flags, int prec);
+char *sl16_fmt_e(sl16_t a, char *flags, int prec);
